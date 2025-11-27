@@ -1,15 +1,11 @@
 import React, { useState, useRef } from 'react';
-import type { CategoryConfig, Product } from '../types';
+import type { CategoryConfig, Product, ProductQuantity } from '../types';
 import { INPUT_BASE_CLASSES } from '../utils/constants';
 import { formatCurrency } from '../utils/formatters';
 import * as inventoryService from '../services/inventoryService';
+import { getTopProducts } from '../utils/commerce';
+import QuantityStepper from './QuantityStepper';
 
-interface ProductQuantity {
-  [productId: string]: {
-    quantity: number;
-    selectedVariantId?: string;
-  };
-}
 
 interface NewExpenseFormProps {
   onAddTransaction: (transaction: { 
@@ -48,34 +44,7 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
   // Derived state for the mode
   const isProductPurchase = category === 'Compra de Productos';
 
-  // Get top 5 products by frequency or most recent
-  const getTopProducts = (allProducts: Product[]) => {
-    // Get transaction items from localStorage to calculate frequency
-    const transactionsData = localStorage.getItem('transactions');
-    const transactions = transactionsData ? JSON.parse(transactionsData) : [];
-    
-    // Calculate product frequency
-    const productFrequency: Record<string, number> = {};
-    transactions.forEach((t: any) => {
-      if (t.items && Array.isArray(t.items)) {
-        t.items.forEach((item: any) => {
-          productFrequency[item.productId] = (productFrequency[item.productId] || 0) + 1;
-        });
-      }
-    });
-    
-    // If we have frequency data, sort by frequency
-    if (Object.keys(productFrequency).length > 0) {
-      return allProducts
-        .sort((a, b) => (productFrequency[b.id] || 0) - (productFrequency[a.id] || 0))
-        .slice(0, 5);
-    }
-    
-    // Otherwise, return 5 most recently created products
-    return allProducts
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5);
-  };
+  // Use shared top-products helper
 
   // Mode Switcher Logic
   const handleModeSwitch = async (mode: 'expense' | 'purchase') => {
@@ -409,21 +378,7 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
                         )}
                       </div>
 
-                      {/* Variant Selector - Top Right */}
-                      {product.hasVariants && product.variants.length > 0 && (
-                        <select
-                          value={selectedVariantId}
-                          onChange={(e) => updateProductVariant(product.id, e.target.value)}
-                          className="absolute top-2 right-2 px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm z-10"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {product.variants.map(variant => (
-                            <option key={variant.id} value={variant.id}>
-                              {variant.name} (Stock: {variant.quantity})
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                      {/* Variant selector and quantity stepper rendered by QuantityStepper */}
 
                       {/* Product Info */}
                       <div className="flex-1 p-3 flex flex-col justify-between">
@@ -437,27 +392,13 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
                             <p className="text-xs text-slate-500 dark:text-slate-400">Stock actual: {product.totalQuantity}</p>
                           </div>
 
-                          {/* Quantity Stepper */}
-                          <div className="flex items-center gap-0">
-                            <button
-                              type="button"
-                              onClick={() => updateProductQuantity(product.id, Math.max(0, currentQuantity - 1), selectedVariantId)}
-                              disabled={currentQuantity === 0}
-                              className="w-8 h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-lg font-bold"
-                            >
-                              −
-                            </button>
-                            <span className="w-10 text-center font-bold text-slate-800 dark:text-white">
-                              {currentQuantity}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => updateProductQuantity(product.id, currentQuantity + 1, selectedVariantId)}
-                              className="w-8 h-8 flex items-center justify-center bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 text-white rounded-lg transition text-lg font-bold"
-                            >
-                              +
-                            </button>
-                          </div>
+                          <QuantityStepper
+                            product={product}
+                            currentQuantity={currentQuantity}
+                            selectedVariantId={selectedVariantId}
+                            onQuantityChange={(q, variantId) => updateProductQuantity(product.id, q, variantId)}
+                            onVariantChange={(variantId) => updateProductVariant(product.id, variantId)}
+                          />
                         </div>
                       </div>
                     </div>

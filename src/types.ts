@@ -44,6 +44,14 @@ export interface Product {
   updatedAt: string;
 }
 
+// Reusable product quantity map used by sale/purchase forms
+export interface ProductQuantity {
+  [productId: string]: {
+    quantity: number;
+    selectedVariantId?: string;
+  };
+}
+
 export interface InventoryFilters {
   searchTerm?: string;
   category?: string;

@@ -1,15 +1,11 @@
 import React, { useState, useRef } from 'react';
-import type { Product } from '../types';
+import type { Product, ProductQuantity } from '../types';
 import { INPUT_BASE_CLASSES } from '../utils/constants';
 import { formatCurrency } from '../utils/formatters';
 import * as inventoryService from '../services/inventoryService';
+import { getTopProducts } from '../utils/commerce';
+import QuantityStepper from './QuantityStepper';
 
-interface ProductQuantity {
-  [productId: string]: {
-    quantity: number;
-    selectedVariantId?: string;
-  };
-}
 
 interface NewSaleFormProps {
   products: Product[];
@@ -45,30 +41,7 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
     }
   };
 
-  // Get top 5 products by frequency or most recent
-  const getTopProducts = (allProducts: Product[]) => {
-    const transactionsData = localStorage.getItem('transactions');
-    const transactions = transactionsData ? JSON.parse(transactionsData) : [];
-    
-    const productFrequency: Record<string, number> = {};
-    transactions.forEach((t: any) => {
-      if (t.items && Array.isArray(t.items)) {
-        t.items.forEach((item: any) => {
-          productFrequency[item.productId] = (productFrequency[item.productId] || 0) + 1;
-        });
-      }
-    });
-    
-    if (Object.keys(productFrequency).length > 0) {
-      return allProducts
-        .sort((a, b) => (productFrequency[b.id] || 0) - (productFrequency[a.id] || 0))
-        .slice(0, 5);
-    }
-    
-    return allProducts
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5);
-  };
+  // Use shared top-products helper
 
   const filteredProducts = searchTerm.trim()
     ? products.filter(p => 
@@ -166,25 +139,52 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
     }
 
     // Handle Inventory Sale
+    // Re-read latest persisted product state to avoid races and validate availability
     const total = calculateTotal();
 
-    // Update inventory for each item
+    const latestProductsMap: Record<string, Product> = {};
+
     for (const [productId, data] of Object.entries(productQuantities)) {
-      const product = products.find(p => p.id === productId);
-      if (!product) continue;
+      const latest = await inventoryService.getProductById(productId);
+      if (!latest) {
+        setFormError('Producto no encontrado. Actualiza la lista e intenta de nuevo.');
+        return;
+      }
+      latestProductsMap[productId] = latest;
 
       if (data.selectedVariantId) {
-        const variant = product.variants.find(v => v.id === data.selectedVariantId);
+        const variant = latest.variants.find(v => v.id === data.selectedVariantId);
+        const available = variant ? variant.quantity : 0;
+        if (data.quantity > available) {
+          setFormError(`Stock insuficiente para ${latest.name}${variant ? ` (${variant.name})` : ''}. Disponibles: ${available}`);
+          return;
+        }
+      } else {
+        const available = latest.totalQuantity;
+        if (data.quantity > available) {
+          setFormError(`Stock insuficiente para ${latest.name}. Disponibles: ${available}`);
+          return;
+        }
+      }
+    }
+
+    // Update inventory for each item using latest persisted quantities
+    for (const [productId, data] of Object.entries(productQuantities)) {
+      const latest = latestProductsMap[productId];
+      if (!latest) continue;
+
+      if (data.selectedVariantId) {
+        const variant = latest.variants.find(v => v.id === data.selectedVariantId);
         if (variant) {
           await inventoryService.updateVariantQuantity(
             productId,
             data.selectedVariantId,
-            variant.quantity - data.quantity
+            Math.max(0, variant.quantity - data.quantity)
           );
         }
       } else {
         await inventoryService.updateProduct(productId, {
-          standaloneQuantity: product.totalQuantity - data.quantity
+          standaloneQuantity: Math.max(0, latest.totalQuantity - data.quantity)
         });
       }
     }
@@ -349,21 +349,7 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
                             )}
                           </div>
 
-                          {/* Variant Selector */}
-                          {product.hasVariants && product.variants.length > 0 && (
-                            <select
-                              value={selectedVariantId}
-                              onChange={(e) => updateProductVariant(product.id, e.target.value)}
-                              className="absolute top-2 right-2 px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm z-10"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {product.variants.map(variant => (
-                                <option key={variant.id} value={variant.id} disabled={variant.quantity === 0}>
-                                  {variant.name} ({variant.quantity})
-                                </option>
-                              ))}
-                            </select>
-                          )}
+                          {/* Variant selector and stepper handled by QuantityStepper */}
 
                           {/* Info & Controls */}
                           <div className="flex-1 p-3 flex flex-col justify-between">
@@ -380,27 +366,13 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
                               </div>
 
                               {!isOutOfStock && (
-                                <div className="flex items-center gap-0">
-                                  <button
-                                    type="button"
-                                    onClick={() => updateProductQuantity(product.id, Math.max(0, currentQuantity - 1), selectedVariantId)}
-                                    disabled={currentQuantity === 0}
-                                    className="w-8 h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg disabled:opacity-50 transition text-lg font-bold"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="w-10 text-center font-bold text-slate-800 dark:text-white">
-                                    {currentQuantity}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => updateProductQuantity(product.id, currentQuantity + 1, selectedVariantId)}
-                                    disabled={currentQuantity >= maxStock}
-                                    className="w-8 h-8 flex items-center justify-center bg-emerald-500 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 transition text-lg font-bold"
-                                  >
-                                    +
-                                  </button>
-                                </div>
+                                <QuantityStepper
+                                  product={product}
+                                  currentQuantity={currentQuantity}
+                                  selectedVariantId={selectedVariantId}
+                                  onQuantityChange={(q, variantId) => updateProductQuantity(product.id, q, variantId)}
+                                  onVariantChange={(variantId) => updateProductVariant(product.id, variantId)}
+                                />
                               )}
                             </div>
                           </div>

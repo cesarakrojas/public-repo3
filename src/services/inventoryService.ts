@@ -179,7 +179,7 @@ export const updateProduct = async (
     // Determine final hasVariants state
     const hasVariants = updates.hasVariants !== undefined ? updates.hasVariants : currentProduct.hasVariants;
     const variants = updates.variants !== undefined ? updates.variants : currentProduct.variants;
-    const standaloneQty = updates.standaloneQuantity !== undefined ? updates.standaloneQuantity : currentProduct.totalQuantity;
+    const standaloneQty = updates.standaloneQuantity !== undefined ? Math.max(0, updates.standaloneQuantity) : currentProduct.totalQuantity;
     
     const updatedProduct: Product = {
       ...currentProduct,
@@ -189,7 +189,7 @@ export const updateProduct = async (
       category: updates.category?.trim(),
       hasVariants,
       variants,
-      totalQuantity: calculateTotalQuantity(hasVariants, variants, standaloneQty),
+      totalQuantity: Math.max(0, calculateTotalQuantity(hasVariants, variants, standaloneQty)),
       updatedAt: new Date().toISOString()
     };
     
