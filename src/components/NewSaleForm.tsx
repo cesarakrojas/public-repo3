@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Product } from '../types';
 import { INPUT_BASE_CLASSES } from '../utils/constants';
 import { formatCurrency } from '../utils/formatters';
@@ -19,22 +19,37 @@ interface NewSaleFormProps {
 }
 
 export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransaction, onClose, onSuccess }) => {
+  // Mode State: 'inventory' (default) or 'manual'
+  const [mode, setMode] = useState<'inventory' | 'manual'>('inventory');
+  
   const [productQuantities, setProductQuantities] = useState<ProductQuantity>({});
   const [paymentMethod, setPaymentMethod] = useState('Efectivo');
   const [searchTerm, setSearchTerm] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [showProductSelection, setShowProductSelection] = useState(false);
   const [isCartConfirmed, setIsCartConfirmed] = useState(false);
   const [manualDescription, setManualDescription] = useState('');
   const [manualAmount, setManualAmount] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Reset states when switching modes
+  const handleModeSwitch = (newMode: 'inventory' | 'manual') => {
+    setMode(newMode);
+    setFormError(null);
+    if (newMode === 'manual') {
+      setProductQuantities({});
+      setIsCartConfirmed(false);
+      setSearchTerm('');
+    } else {
+      setManualDescription('');
+      setManualAmount('');
+    }
+  };
 
   // Get top 5 products by frequency or most recent
   const getTopProducts = (allProducts: Product[]) => {
-    // Get transaction items from localStorage to calculate frequency
     const transactionsData = localStorage.getItem('transactions');
     const transactions = transactionsData ? JSON.parse(transactionsData) : [];
     
-    // Calculate product frequency
     const productFrequency: Record<string, number> = {};
     transactions.forEach((t: any) => {
       if (t.items && Array.isArray(t.items)) {
@@ -44,14 +59,12 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
       }
     });
     
-    // If we have frequency data, sort by frequency
     if (Object.keys(productFrequency).length > 0) {
       return allProducts
         .sort((a, b) => (productFrequency[b.id] || 0) - (productFrequency[a.id] || 0))
         .slice(0, 5);
     }
     
-    // Otherwise, return 5 most recently created products
     return allProducts
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
@@ -66,7 +79,6 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
 
   const updateProductQuantity = (productId: string, newQuantity: number, variantId?: string) => {
     if (newQuantity === 0) {
-      // Remove product from quantities
       const newQuantities = { ...productQuantities };
       delete newQuantities[productId];
       setProductQuantities(newQuantities);
@@ -115,20 +127,25 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     const itemCount = Object.keys(productQuantities).length;
     const hasManualEntry = manualAmount && parseFloat(manualAmount) > 0;
 
-    // Require either products or manual entry
-    if (itemCount === 0 && !hasManualEntry) {
-      alert('Agrega productos o ingresa un monto para la venta');
+    // Validation
+    if (mode === 'inventory' && itemCount === 0) {
+      setFormError('Agrega al menos un producto para la venta.');
+      return;
+    }
+    if (mode === 'manual' && !hasManualEntry) {
+      setFormError('Ingresa un monto válido.');
       return;
     }
 
-    // Handle manual entry (no products selected)
-    if (itemCount === 0 && hasManualEntry) {
+    // Handle Manual Entry
+    if (mode === 'manual') {
       const amount = parseFloat(manualAmount);
-      const description = manualDescription.trim() || 'Venta manual';
+      const description = manualDescription.trim() || 'Venta Rápida';
 
       onAddTransaction({
         description,
@@ -137,12 +154,10 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
         paymentMethod: paymentMethod || undefined
       });
 
-      // Reset state
       setManualDescription('');
       setManualAmount('');
       setPaymentMethod('Efectivo');
 
-      // Show success modal and close
       if (onSuccess) {
         onSuccess('¡Venta Completada!', `Venta de ${formatCurrency(amount)} registrada`);
       }
@@ -150,7 +165,7 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
       return;
     }
 
-    // Handle product-based sale
+    // Handle Inventory Sale
     const total = calculateTotal();
 
     // Update inventory for each item
@@ -159,7 +174,6 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
       if (!product) continue;
 
       if (data.selectedVariantId) {
-        // Update variant quantity
         const variant = product.variants.find(v => v.id === data.selectedVariantId);
         if (variant) {
           await inventoryService.updateVariantQuantity(
@@ -169,19 +183,16 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
           );
         }
       } else {
-        // Update standalone product quantity
         await inventoryService.updateProduct(productId, {
           standaloneQuantity: product.totalQuantity - data.quantity
         });
       }
     }
 
-    // Create transaction description
     const description = itemCount === 1 
       ? `Venta: ${products.find(p => p.id === Object.keys(productQuantities)[0])?.name}${Object.values(productQuantities)[0].quantity > 1 ? ` x${Object.values(productQuantities)[0].quantity}` : ''}`
       : `Venta: ${itemCount} productos`;
 
-    // Build items array with product details
     const items = Object.entries(productQuantities).map(([productId, data]) => {
       const product = products.find(p => p.id === productId);
       if (!product) return null;
@@ -201,7 +212,6 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
       };
     }).filter(item => item !== null) as { productId: string; productName: string; quantity: number; variantName?: string; price: number; }[];
 
-    // Add transaction
     onAddTransaction({
       description,
       amount: total,
@@ -210,12 +220,10 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
       items
     });
 
-    // Reset state
     setProductQuantities({});
     setPaymentMethod('Efectivo');
     setSearchTerm('');
 
-    // Show success modal and close
     if (onSuccess) {
       const message = itemCount === 1 
         ? `Venta de ${formatCurrency(total)} registrada`
@@ -227,16 +235,12 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
   };
 
   const handleConfirmCart = () => {
+    setFormError(null);
     if (Object.keys(productQuantities).length > 0) {
       setIsCartConfirmed(true);
-      setShowProductSelection(false);
     } else {
-      alert('Agrega al menos un producto antes de confirmar');
+      setFormError('Agrega al menos un producto antes de confirmar');
     }
-  };
-
-  const handleEditCart = () => {
-    setShowProductSelection(true);
   };
 
   return (
@@ -244,32 +248,224 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
         {/* Scrollable Area */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-4">
         
-        {!showProductSelection && !isCartConfirmed && (
-          <>
-            {/* Add Products Button - Initial State */}
+        {/* 1. MODE TOGGLE */}
+        <div className="bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl flex mb-4">
             <button
-              type="button"
-              onClick={() => setShowProductSelection(true)}
-              className="w-full bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-2 border-dashed border-emerald-300 dark:border-emerald-700 rounded-xl p-8 hover:border-emerald-500 dark:hover:border-emerald-500 hover:from-emerald-100 hover:to-teal-100 dark:hover:from-emerald-900/30 dark:hover:to-teal-900/30 transition-all group"
+                type="button"
+                onClick={() => handleModeSwitch('inventory')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                    mode === 'inventory' 
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
             >
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-8 h-8 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </div>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                Inventario
+            </button>
+            <button
+                type="button"
+                onClick={() => handleModeSwitch('manual')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                    mode === 'manual' 
+                    ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-800 dark:text-white' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+            >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Venta Rápida
+            </button>
+        </div>
+
+        {/* Validation Error Message */}
+        {formError && (
+            <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm font-medium flex items-center gap-2 animate-fade-in">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {formError}
+            </div>
+        )}
+
+        {/* --- INVENTORY MODE --- */}
+        {mode === 'inventory' && (
+          <>
+            {!isCartConfirmed && (
+              <>
+                {/* Product Search */}
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
-                    Agregar Productos
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Selecciona los productos para esta venta
-                  </p>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Buscar Producto
+                  </label>
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar por nombre o categoría..."
+                    className={INPUT_BASE_CLASSES}
+                    // AutoFocus removed for better mobile UX
+                  />
+                  {!searchTerm.trim() && (
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Top productos más frecuentes
+                    </p>
+                  )}
+                </div>
+
+                {/* Product Grid */}
+                <div className="grid grid-cols-1 gap-3">
+                  {filteredProducts.length === 0 ? (
+                    <div className="text-center py-10 text-slate-500 dark:text-slate-400">
+                      <p>No se encontraron productos</p>
+                    </div>
+                  ) : (
+                    filteredProducts.map(product => {
+                      const productData = productQuantities[product.id];
+                      const currentQuantity = productData?.quantity || 0;
+                      const selectedVariantId = productData?.selectedVariantId || (product.hasVariants && product.variants.length > 0 ? product.variants[0].id : undefined);
+                      const maxStock = getMaxStock(product, selectedVariantId);
+                      const isOutOfStock = maxStock === 0;
+
+                      return (
+                        <div
+                          key={product.id}
+                          className={`bg-white dark:bg-slate-800 shadow-md rounded-xl overflow-hidden flex relative ${isOutOfStock ? 'opacity-60' : ''}`}
+                        >
+                          {/* Image */}
+                          <div className="w-24 flex-shrink-0 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center overflow-hidden">
+                            {product.image ? (
+                              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <svg className="w-10 h-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                              </svg>
+                            )}
+                          </div>
+
+                          {/* Variant Selector */}
+                          {product.hasVariants && product.variants.length > 0 && (
+                            <select
+                              value={selectedVariantId}
+                              onChange={(e) => updateProductVariant(product.id, e.target.value)}
+                              className="absolute top-2 right-2 px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm z-10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {product.variants.map(variant => (
+                                <option key={variant.id} value={variant.id} disabled={variant.quantity === 0}>
+                                  {variant.name} ({variant.quantity})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+
+                          {/* Info & Controls */}
+                          <div className="flex-1 p-3 flex flex-col justify-between">
+                            <div className={product.hasVariants ? "pr-20" : ""}>
+                              <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-1 line-clamp-2">{product.name}</h3>
+                            </div>
+
+                            <div className="flex justify-between items-end gap-3">
+                              <div>
+                                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(product.price)}</p>
+                                <p className={`text-xs ${isOutOfStock ? 'text-red-500 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                                  {isOutOfStock ? 'Agotado' : `Stock: ${maxStock}`}
+                                </p>
+                              </div>
+
+                              {!isOutOfStock && (
+                                <div className="flex items-center gap-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateProductQuantity(product.id, Math.max(0, currentQuantity - 1), selectedVariantId)}
+                                    disabled={currentQuantity === 0}
+                                    className="w-8 h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg disabled:opacity-50 transition text-lg font-bold"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="w-10 text-center font-bold text-slate-800 dark:text-white">
+                                    {currentQuantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateProductQuantity(product.id, currentQuantity + 1, selectedVariantId)}
+                                    disabled={currentQuantity >= maxStock}
+                                    className="w-8 h-8 flex items-center justify-center bg-emerald-500 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 transition text-lg font-bold"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Confirm Button */}
+                {Object.keys(productQuantities).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleConfirmCart}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg"
+                  >
+                    Ver Resumen ({Object.keys(productQuantities).length})
+                  </button>
+                )}
+              </>
+            )}
+
+            {isCartConfirmed && (
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="font-bold text-slate-800 dark:text-white">Productos en Carrito</h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsCartConfirmed(false)}
+                    className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
+                  >
+                    Seguir agregando
+                  </button>
+                </div>
+                <div className="space-y-2 mb-3">
+                  {Object.entries(productQuantities).map(([productId, data]) => {
+                    const product = products.find(p => p.id === productId);
+                    if (!product) return null;
+                    const variant = data.selectedVariantId ? product.variants.find(v => v.id === data.selectedVariantId) : null;
+                    return (
+                      <div key={productId} className="flex justify-between text-sm">
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {product.name} {variant && `(${variant.name})`} x{data.quantity}
+                        </span>
+                        <span className="font-semibold text-slate-800 dark:text-white">
+                          {formatCurrency(product.price * data.quantity)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div className="pt-2 border-t border-emerald-200 dark:border-emerald-700 flex justify-between font-bold">
+                    <span className="text-slate-800 dark:text-white">Subtotal:</span>
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(calculateTotal())}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </button>
+            )}
+          </>
+        )}
 
-            {/* Manual Entry Fields - Alternative to Product Selection */}
+        {/* --- MANUAL MODE --- */}
+        {mode === 'manual' && (
+          <>
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Descripción
@@ -278,11 +474,10 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
                 type="text"
                 value={manualDescription}
                 onChange={(e) => setManualDescription(e.target.value)}
-                placeholder="Descripción de la venta (opcional)"
+                placeholder="Ej: Servicio de instalación"
                 className={INPUT_BASE_CLASSES}
               />
             </div>
-
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Monto
@@ -297,202 +492,11 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
                 className={INPUT_BASE_CLASSES}
               />
             </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Método de Pago
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className={INPUT_BASE_CLASSES}
-              >
-                <option value="Efectivo">Efectivo</option>
-                <option value="Tarjeta">Tarjeta</option>
-                <option value="Transferencia">Transferencia</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Otro">Otro</option>
-              </select>
-            </div>
           </>
         )}
 
-        {showProductSelection && (
-          /* Product Selection Interface */
-          <>
-            {/* Product Search */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Buscar Producto
-              </label>
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nombre o categoría..."
-                autoFocus
-                className={INPUT_BASE_CLASSES}
-              />
-              {!searchTerm.trim() && (
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Mostrando los 5 productos más frecuentes. Escribe para buscar más.
-                </p>
-              )}
-            </div>
-
-            {/* Product Cards Grid */}
-            <div className="grid grid-cols-1 gap-3">
-          {filteredProducts.length === 0 ? (
-            <div className="text-center py-10 text-slate-500 dark:text-slate-400">
-              <p>No se encontraron productos</p>
-            </div>
-          ) : (
-            filteredProducts.map(product => {
-              const productData = productQuantities[product.id];
-              const currentQuantity = productData?.quantity || 0;
-              const selectedVariantId = productData?.selectedVariantId || (product.hasVariants && product.variants.length > 0 ? product.variants[0].id : undefined);
-              const maxStock = getMaxStock(product, selectedVariantId);
-
-              return (
-                <div
-                  key={product.id}
-                  className="bg-white dark:bg-slate-800 shadow-md rounded-xl overflow-hidden flex relative"
-                >
-                  {/* Product Image */}
-                  <div className="w-24 flex-shrink-0 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center overflow-hidden">
-                    {product.image ? (
-                      <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <svg className="w-10 h-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                      </svg>
-                    )}
-                  </div>
-
-                  {/* Variant Selector - Top Right */}
-                  {product.hasVariants && product.variants.length > 0 && (
-                    <select
-                      value={selectedVariantId}
-                      onChange={(e) => updateProductVariant(product.id, e.target.value)}
-                      className="absolute top-2 right-2 px-2 py-1 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm z-10"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {product.variants.map(variant => (
-                        <option key={variant.id} value={variant.id} disabled={variant.quantity === 0}>
-                          {variant.name} ({variant.quantity})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {/* Product Info */}
-                  <div className="flex-1 p-3 flex flex-col justify-between">
-                    <div className={product.hasVariants && product.variants.length > 0 ? "pr-20" : ""}>
-                      <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-1 line-clamp-2">{product.name}</h3>
-                      
-                    </div>
-
-                    <div className="flex justify-between items-end gap-3">
-                      <div>
-                        <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(product.price)}</p>
-                      </div>
-
-                      {/* Quantity Stepper */}
-                      <div className="flex items-center gap-0">
-                        <button
-                          type="button"
-                          onClick={() => updateProductQuantity(product.id, Math.max(0, currentQuantity - 1), selectedVariantId)}
-                          disabled={currentQuantity === 0}
-                          className="w-8 h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-lg font-bold"
-                        >
-                          −
-                        </button>
-                        <span className="w-10 text-center font-bold text-slate-800 dark:text-white">
-                          {currentQuantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => updateProductQuantity(product.id, currentQuantity + 1, selectedVariantId)}
-                          disabled={currentQuantity >= maxStock || maxStock === 0}
-                          className="w-8 h-8 flex items-center justify-center bg-emerald-500 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-lg font-bold"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-            {/* Confirm Cart Button */}
-            {Object.keys(productQuantities).length > 0 && (
-              <button
-                type="button"
-                onClick={handleConfirmCart}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg"
-              >
-                Confirmar Productos ({Object.keys(productQuantities).length})
-              </button>
-            )}
-          </>
-        )}
-
-        {isCartConfirmed && (
-          /* Cart Summary */
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-4">
-            <div className="flex justify-between items-start mb-3">
-              <h3 className="font-bold text-slate-800 dark:text-white">
-                Productos Seleccionados ({Object.keys(productQuantities).length})
-              </h3>
-              <button
-                type="button"
-                onClick={handleEditCart}
-                className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
-              >
-                Editar
-              </button>
-            </div>
-            <div className="space-y-2">
-              {Object.entries(productQuantities).map(([productId, data]) => {
-                const product = products.find(p => p.id === productId);
-                if (!product) return null;
-                
-                let variantName = '';
-                if (data.selectedVariantId) {
-                  const variant = product.variants.find(v => v.id === data.selectedVariantId);
-                  variantName = variant ? ` - ${variant.name}` : '';
-                }
-                
-                return (
-                  <div key={productId} className="flex justify-between text-sm">
-                    <span className="text-slate-700 dark:text-slate-300">
-                      {product.name}{variantName} x{data.quantity}
-                    </span>
-                    <span className="font-semibold text-slate-800 dark:text-white">
-                      {formatCurrency(product.price * data.quantity)}
-                    </span>
-                  </div>
-                );
-              })}
-              <div className="pt-2 border-t border-emerald-200 dark:border-emerald-700 flex justify-between font-bold">
-                <span className="text-slate-800 dark:text-white">Subtotal:</span>
-                <span className="text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(calculateTotal())}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isCartConfirmed && (
-          /* Payment Method - Only shown after cart is confirmed */
+        {/* Payment Method - Always Visible if applicable */}
+        {(mode === 'manual' || isCartConfirmed) && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
               Método de Pago
@@ -512,36 +516,24 @@ export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransac
         )}
       </div>
 
-      {/* Fixed Footer: Total and Submit - Show for cart confirmed OR manual entry */}
-      {(isCartConfirmed || (!showProductSelection && !isCartConfirmed && (manualAmount || manualDescription))) && (
+      {/* Footer */}
+      {(mode === 'manual' || isCartConfirmed) && (
         <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 pt-6 px-6 space-y-4 bg-white dark:bg-slate-800 pb-6 -mx-6">
-          {isCartConfirmed && (
-            <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-slate-700 dark:text-slate-300">Total:</span>
-                <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(calculateTotal())}
-                </span>
-              </div>
+          <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+            <div className="flex justify-between items-center">
+              <span className="text-lg font-semibold text-slate-700 dark:text-slate-300">Total a Cobrar:</span>
+              <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                {mode === 'manual' 
+                  ? formatCurrency(parseFloat(manualAmount || '0')) 
+                  : formatCurrency(calculateTotal())}
+              </span>
             </div>
-          )}
-
-          {!isCartConfirmed && manualAmount && parseFloat(manualAmount) > 0 && (
-            <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-slate-700 dark:text-slate-300">Total:</span>
-                <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(parseFloat(manualAmount))}
-                </span>
-              </div>
-            </div>
-          )}
-
+          </div>
           <button
             type="submit"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-lg transition-transform transform hover:scale-105 shadow-lg"
           >
-            Completar Venta
+            Cobrar
           </button>
         </div>
       )}

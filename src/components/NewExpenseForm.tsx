@@ -35,6 +35,7 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
   const [category, setCategory] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [amount, setAmount] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   
   // Product purchase states
   const [products, setProducts] = useState<Product[]>([]);
@@ -43,6 +44,9 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showProductSelection, setShowProductSelection] = useState(false);
   const [isCartConfirmed, setIsCartConfirmed] = useState(false);
+
+  // Derived state for the mode
+  const isProductPurchase = category === 'Compra de Productos';
 
   // Get top 5 products by frequency or most recent
   const getTopProducts = (allProducts: Product[]) => {
@@ -73,17 +77,19 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
       .slice(0, 5);
   };
 
-  // Load products when "Compra de Productos" is selected
-  const handleCategoryChange = async (newCategory: string) => {
-    setCategory(newCategory);
-    if (newCategory === 'Compra de Productos') {
+  // Mode Switcher Logic
+  const handleModeSwitch = async (mode: 'expense' | 'purchase') => {
+    setFormError(null);
+    if (mode === 'purchase') {
+      setCategory('Compra de Productos');
       const loadedProducts = await inventoryService.getAllProducts();
       setProducts(loadedProducts);
       setProductQuantities({});
       setSearchTerm('');
-      setShowProductSelection(false);
+      setShowProductSelection(true); // Open selection immediately
       setIsCartConfirmed(false);
     } else {
+      setCategory('');
       setProducts([]);
       setProductQuantities({});
       setShowProductSelection(false);
@@ -91,16 +97,28 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
     }
   };
 
+  // Handle standard category change (for regular expenses)
+  const handleCategoryChange = (newCategory: string) => {
+    // Prevent manual selection of "Compra de Productos" via dropdown to enforce the toggle UX
+    if (newCategory === 'Compra de Productos') {
+        handleModeSwitch('purchase');
+    } else {
+        setCategory(newCategory);
+    }
+  };
+
   const handleConfirmCart = () => {
+    setFormError(null);
     if (Object.keys(productQuantities).length > 0) {
       setIsCartConfirmed(true);
       setShowProductSelection(false);
     } else {
-      alert('Agrega al menos un producto antes de confirmar');
+      setFormError('Agrega al menos un producto antes de confirmar.');
     }
   };
 
   const handleEditCart = () => {
+    setFormError(null);
     setShowProductSelection(true);
   };
 
@@ -143,12 +161,13 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
-    // If "Compra de Productos" is selected, handle product purchase
-    if (category === 'Compra de Productos') {
+    // Logic for Product Purchase (Inventory Restock)
+    if (isProductPurchase) {
       const itemCount = Object.keys(productQuantities).length;
       if (itemCount === 0) {
-        alert('Agrega al menos un producto a la compra');
+        setFormError('Agrega al menos un producto a la compra.');
         return;
       }
 
@@ -211,16 +230,9 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
         items
       });
 
-      // Reset state
-      setDescription('');
-      setCategory('');
-      setPaymentMethod('');
-      setAmount('');
-      setProductQuantities({});
-      setProducts([]);
-      setSearchTerm('');
+      // Cleanup
+      resetForm();
 
-      // Show success modal and close
       if (onSuccess) {
         const message = itemCount === 1 
           ? `Compra de ${formatCurrency(total)} registrada`
@@ -229,8 +241,9 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
       }
       
       if (onClose) onClose();
+
     } else {
-      // Regular expense flow
+      // Logic for Regular Expense
       if (description.trim() && parseFloat(amount) > 0) {
         const expenseAmount = parseFloat(amount);
         
@@ -242,13 +255,9 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
           paymentMethod: paymentMethod || undefined
         });
         
-        // Reset state
-        setDescription('');
-        setCategory('');
-        setPaymentMethod('');
-        setAmount('');
+        // Cleanup
+        resetForm();
         
-        // Show success modal and close
         if (onSuccess) {
           onSuccess('¡Gasto Registrado!', `Gasto de ${formatCurrency(expenseAmount)} registrado`, 'expense');
         }
@@ -258,7 +267,16 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
     }
   };
 
-  const isProductPurchase = category === 'Compra de Productos';
+  const resetForm = () => {
+      setDescription('');
+      setCategory('');
+      setPaymentMethod('');
+      setAmount('');
+      setProductQuantities({});
+      setProducts([]);
+      setSearchTerm('');
+      setFormError(null);
+  };
 
   const filteredProducts = isProductPurchase 
     ? (searchTerm.trim()
@@ -274,8 +292,50 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
         {/* Scrollable Area */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-4">
         
-        {/* Category Selection */}
-        {categoryConfig.enabled && (
+        {/* 1. EXPLICIT TYPE TOGGLE (New UX) */}
+        <div className="bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl flex mb-4">
+            <button
+                type="button"
+                onClick={() => handleModeSwitch('expense')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                    !isProductPurchase 
+                    ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-800 dark:text-white' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+            >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Gasto Simple
+            </button>
+            <button
+                type="button"
+                onClick={() => handleModeSwitch('purchase')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                    isProductPurchase 
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+            >
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                + Inventario
+            </button>
+        </div>
+
+        {/* Validation Error Message */}
+        {formError && (
+            <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm font-medium flex items-center gap-2 animate-fade-in">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {formError}
+            </div>
+        )}
+
+        {/* Category Selection - Only show for Regular Expenses */}
+        {categoryConfig.enabled && !isProductPurchase && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
               Categoría
@@ -286,7 +346,6 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
               className={INPUT_BASE_CLASSES}
             >
               <option value="">Seleccionar categoría (opcional)</option>
-              <option value="Compra de Productos">Compra de Productos</option>
               {categoryConfig.outflowCategories.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -297,34 +356,9 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
         {/* Product Purchase Section */}
         {isProductPurchase ? (
           <>
-            {!showProductSelection && !isCartConfirmed && (
-              /* Add Products Button - Initial State */
-              <button
-                type="button"
-                onClick={() => setShowProductSelection(true)}
-                className="w-full bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-2 border-dashed border-red-300 dark:border-red-700 rounded-xl p-8 hover:border-red-500 dark:hover:border-red-500 hover:from-red-100 hover:to-orange-100 dark:hover:from-red-900/30 dark:hover:to-orange-900/30 transition-all group"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
-                      Agregar Productos para Compra
-                    </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Selecciona los productos que estás comprando
-                    </p>
-                  </div>
-                </div>
-              </button>
-            )}
-
             {showProductSelection && (
               <>
-                {/* Product Search */}
+                {/* Product Search - Removed autoFocus for Mobile UX */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                     Buscar Producto
@@ -335,7 +369,6 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar por nombre o categoría..."
-                    autoFocus
                     className={INPUT_BASE_CLASSES}
                   />
                   {!searchTerm.trim() && (
@@ -343,7 +376,7 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Mostrando los 5 productos más frecuentes. Escribe para buscar más.
+                      Mostrando los 5 productos más frecuentes
                     </p>
                   )}
                 </div>
@@ -439,7 +472,7 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
                   onClick={handleConfirmCart}
                   className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all"
                 >
-                  Confirmar Productos ({Object.keys(productQuantities).length})
+                  Ver Resumen ({Object.keys(productQuantities).length})
                 </button>
               </>
             )}
@@ -459,7 +492,7 @@ export const NewExpenseForm: React.FC<NewExpenseFormProps> = ({
                     onClick={handleEditCart}
                     className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-semibold"
                   >
-                    Editar
+                    + Agregar más
                   </button>
                 </div>
                 
