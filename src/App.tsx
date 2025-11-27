@@ -23,6 +23,7 @@ import { calculateTotalInflows, calculateTotalOutflows } from './utils/calculati
 import { formatCurrency, formatTime } from './utils/formatters';
 import * as dataService from './services/dataService';
 import { populateSampleData } from './utils/sampleData';
+import { useAppNavigation } from './hooks/useAppNavigation';
 
 // --- CHILD COMPONENTS ---
 
@@ -99,14 +100,23 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction, onClick 
 // --- MAIN APP COMPONENT ---
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'inventory' | 'reports' | 'settings' | 'new-sale' | 'new-expense' | 'transaction-detail'>('home');
-  const [inventoryViewMode, setInventoryViewMode] = useState<'list' | 'create' | 'edit' | 'detail'>('list');
-  const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
-  const [libretaViewMode, setLibretaViewMode] = useState<'list' | 'create' | 'edit' | 'detail'>('list');
-  const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
-  const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
+  const {
+    view,
+    navigate,
+
+    inventoryViewMode,
+    changeInventoryView,
+    editingProductId,
+    selectedProductId,
+
+    libretaViewMode,
+    changeLibretaView,
+    editingDebtId,
+    selectedDebtId,
+
+    selectedTransactionId,
+    setSelectedTransactionId,
+  } = useAppNavigation();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -241,54 +251,17 @@ export default function App() {
   };
 
   const handleInventoryViewChange = (mode: 'list' | 'create' | 'edit' | 'detail', productId?: string) => {
-    setInventoryViewMode(mode);
-    if (mode === 'edit' && productId) {
-      setEditingProductId(productId);
-      setSelectedProductId(null);
-    } else if (mode === 'detail' && productId) {
-      setSelectedProductId(productId);
-      setEditingProductId(null);
-    } else {
-      setEditingProductId(null);
-      setSelectedProductId(null);
-    }
+    // delegate to navigation hook which centralizes reset logic
+    changeInventoryView(mode, productId);
   };
 
   const handleLibretaViewChange = (mode: 'list' | 'create' | 'edit' | 'detail', debtId?: string) => {
-    setLibretaViewMode(mode);
-    if (mode === 'edit' && debtId) {
-      setEditingDebtId(debtId);
-      setSelectedDebtId(null);
-    } else if (mode === 'detail' && debtId) {
-      setSelectedDebtId(debtId);
-      setEditingDebtId(null);
-    } else {
-      setEditingDebtId(null);
-      setSelectedDebtId(null);
-    }
+    // delegate to navigation hook which centralizes reset logic
+    changeLibretaView(mode, debtId);
   };
 
   // Reset inventory view mode when leaving inventory - only run cleanup on view change
-  useEffect(() => {
-    return () => {
-      if (view === 'inventory') {
-        setInventoryViewMode('list');
-        setEditingProductId(null);
-        setSelectedProductId(null);
-      }
-    };
-  }, []);
-
-  // Reset libreta view mode when leaving libreta - only run cleanup on view change
-  useEffect(() => {
-    return () => {
-      if (view === 'reports') {
-        setLibretaViewMode('list');
-        setEditingDebtId(null);
-        setSelectedDebtId(null);
-      }
-    };
-  }, []);
+  // Navigation state resets are handled inside `useAppNavigation`.
 
   const totalInflows = useMemo(() => calculateTotalInflows(transactions), [transactions]);
   const totalOutflows = useMemo(() => calculateTotalOutflows(transactions), [transactions]);
@@ -306,10 +279,10 @@ export default function App() {
                     </p>
                   </div>
                   <div className="w-full sm:w-auto grid grid-cols-2 gap-2">
-                    <button onClick={() => setView('new-sale')} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-emerald-500/30 transition-transform transform hover:scale-105">
+                    <button onClick={() => navigate('new-sale')} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-emerald-500/30 transition-transform transform hover:scale-105">
                       <ArrowUpIcon className="w-5 h-5"/> Venta
                     </button>
-                    <button onClick={() => setView('new-expense')} className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-red-500/30 transition-transform transform hover:scale-105">
+                    <button onClick={() => navigate('new-expense')} className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-red-500/30 transition-transform transform hover:scale-105">
                       <ArrowDownIcon className="w-5 h-5"/> Gasto
                     </button>
                   </div>
@@ -346,7 +319,7 @@ export default function App() {
                                     transaction={t} 
                                     onClick={() => {
                                       setSelectedTransactionId(t.id);
-                                      setView('transaction-detail');
+                                      navigate('transaction-detail');
                                     }}
                                   />
                                 ))}
@@ -446,11 +419,11 @@ export default function App() {
 
   const NewSaleView = () => {
     return (
-      <FormViewWrapper title="Nueva Venta" onClose={() => setView('home')}>
+      <FormViewWrapper title="Nueva Venta" onClose={() => navigate('home')}>
         <NewSaleForm 
           products={products}
           onAddTransaction={handleAddTransaction} 
-          onClose={() => setView('home')}
+          onClose={() => navigate('home')}
           onSuccess={(title, message) => {
             setSuccessModalTitle(title);
             setSuccessModalMessage(message);
@@ -464,12 +437,12 @@ export default function App() {
 
   const NewExpenseView = () => {
     return (
-      <FormViewWrapper title="Nuevo Gasto" onClose={() => setView('home')}>
+      <FormViewWrapper title="Nuevo Gasto" onClose={() => navigate('home')}>
         <div className="pb-6">
           <NewExpenseForm 
             onAddTransaction={handleAddTransaction} 
             categoryConfig={categoryConfig}
-            onClose={() => setView('home')}
+            onClose={() => navigate('home')}
             onSuccess={(title, message, type) => {
               setSuccessModalTitle(title);
               setSuccessModalMessage(message);
@@ -491,7 +464,7 @@ export default function App() {
           <div className="text-center">
             <p className="text-xl text-slate-600 dark:text-slate-400">Transacción no encontrada</p>
             <button
-              onClick={() => setView('home')}
+              onClick={() => navigate('home')}
               className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-6 rounded-xl transition-colors"
             >
               Volver al Inicio
@@ -511,7 +484,7 @@ export default function App() {
       <div className="w-full h-full mx-auto animate-fade-in flex items-stretch">
         <TransactionDetailView
           transaction={transaction}
-          onClose={() => setView('home')}
+          onClose={() => navigate('home')}
           onEdit={handleEdit}
           currencyCode={currencyCode}
         />
@@ -714,31 +687,42 @@ export default function App() {
 
               {/* Items with large touch targets */}
               <div className="py-2">
-                <button
-                  onClick={() => { setIsMenuOpen(false); }}
-                  className="w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-800 dark:text-slate-100 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition"
-                >
-                  <CashIcon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                  <span>Registro</span>
-                </button>
-                <button
-                  onClick={() => { setIsMenuOpen(false); alert('Módulo de Productos próximamente'); }}
-                  className="w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
-                >
-                  <div className="w-6 h-6 text-slate-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-                    </svg>
-                  </div>
-                  <span>Productos</span>
-                </button>
-                <button
-                  onClick={() => { setIsMenuOpen(false); alert('Módulo de Clientes próximamente'); }}
-                  className="w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
-                >
-                  <UserIcon className="w-6 h-6 text-slate-400" />
-                  <span>Clientes</span>
-                </button>
+                <nav aria-label="Menú principal" className="py-2">
+                  <ul className="space-y-1">
+                    <li>
+                      <button
+                        onClick={() => { setIsMenuOpen(false); navigate('home'); }}
+                        aria-current={view === 'home' || undefined}
+                        className="w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-800 dark:text-slate-100 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition"
+                      >
+                        <CashIcon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                        <span>Registro</span>
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => { setIsMenuOpen(false); alert('Módulo de Productos próximamente'); }}
+                        className="w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
+                      >
+                        <span className="w-6 h-6 text-slate-400 inline-flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                          </svg>
+                        </span>
+                        <span>Productos</span>
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => { setIsMenuOpen(false); alert('Módulo de Clientes próximamente'); }}
+                        className="w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
+                      >
+                        <UserIcon className="w-6 h-6 text-slate-400" />
+                        <span>Clientes</span>
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
               </div>
             </div>
             {/* Spacer to catch clicks on the right area; click closes via backdrop */}
@@ -763,7 +747,7 @@ export default function App() {
         isOpen={showSuccessModal}
         onClose={() => {
           setShowSuccessModal(false);
-          setView('home');
+          navigate('home');
         }}
         title={successModalTitle}
         message={successModalMessage}
@@ -776,7 +760,7 @@ export default function App() {
           <div className="max-w-md mx-auto px-4 py-3">
             <div className="flex justify-around items-center">
             <button
-              onClick={() => setView('home')}
+              onClick={() => navigate('home')}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition ${
                 view === 'home' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
               }`}
@@ -785,7 +769,7 @@ export default function App() {
               <span className="text-xs font-medium">Inicio</span>
             </button>
             <button
-              onClick={() => setView('reports')}
+              onClick={() => navigate('reports')}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition ${
                 view === 'reports' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
               }`}
@@ -794,7 +778,7 @@ export default function App() {
               <span className="text-xs font-medium">Libreta</span>
             </button>
             <button
-              onClick={() => setView('inventory')}
+              onClick={() => navigate('inventory')}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition ${
                 view === 'inventory' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
               }`}
@@ -803,7 +787,7 @@ export default function App() {
               <span className="text-xs font-medium">Inventario</span>
             </button>
             <button
-              onClick={() => setView('settings')}
+              onClick={() => navigate('settings')}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition ${
                 view === 'settings' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
               }`}
