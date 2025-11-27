@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Product, ProductQuantity } from '../types';
 import { INPUT_BASE_CLASSES } from '../utils/constants';
 import { formatCurrency } from '../utils/formatters';
@@ -15,6 +15,11 @@ interface NewSaleFormProps {
 }
 
 export const NewSaleForm: React.FC<NewSaleFormProps> = ({ products, onAddTransaction, onClose, onSuccess }) => {
+  useEffect(() => {
+    // Reset scroll position to the top of the page
+    window.scrollTo(0, 0);
+  }, []);
+
   // Mode State: 'inventory' (default) or 'manual'
   const [mode, setMode] = useState<'inventory' | 'manual'>('inventory');
   

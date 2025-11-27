@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { DebtEntry } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { CloseIcon, CheckCircleIcon, PencilIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon } from './icons';
@@ -20,6 +20,11 @@ export const DebtDetailView: React.FC<DebtDetailViewProps> = ({
   onMarkAsPaid,
   currencyCode
 }) => {
+  useEffect(() => {
+    // Reset scroll position to the top of the page
+    window.scrollTo(0, 0);
+  }, []);
+
   const isPaid = debt.status === 'paid';
   const isOverdue = debt.status === 'overdue';
   const isReceivable = debt.type === 'receivable';

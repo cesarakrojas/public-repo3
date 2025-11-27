@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { Product } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { CloseIcon, PencilIcon, TrashIcon } from './icons';
@@ -16,6 +16,11 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   onEdit,
   onDelete
 }) => {
+  useEffect(() => {
+    // Reset scroll position to the top of the page
+    window.scrollTo(0, 0);
+  }, []);
+
   const isLowStock = product.totalQuantity <= 10;
 
   return (

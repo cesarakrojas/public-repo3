@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { Transaction } from '../types';
 import { formatCurrency, formatDate, formatTime } from '../utils/formatters';
 import { CloseIcon, ArrowUpIcon, ArrowDownIcon, PrinterIcon, PencilIcon } from './icons';
@@ -16,6 +16,11 @@ export const TransactionDetailView: React.FC<TransactionDetailViewProps> = ({
   onEdit,
   currencyCode
 }) => {
+  useEffect(() => {
+    // Reset scroll position to the top of the page
+    window.scrollTo(0, 0);
+  }, []);
+
   const isInflow = transaction.type === 'inflow';
 
   const handlePrintReceipt = () => {

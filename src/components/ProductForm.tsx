@@ -34,6 +34,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCan
     }
   }, [product]);
 
+  useEffect(() => {
+    // Reset scroll position to the top of the page
+    window.scrollTo(0, 0);
+  }, []);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
