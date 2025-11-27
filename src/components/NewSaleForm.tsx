@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import type { Product } from '../types';
 import { INPUT_BASE_CLASSES } from '../utils/constants';
 import { formatCurrency } from '../utils/formatters';
