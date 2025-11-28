@@ -164,6 +164,11 @@ export const LibretaView: React.FC<LibretaViewProps> = ({ onChangeView }) => {
     }
   };
 
+  useEffect(() => {
+    // Reset scroll position to the top of the page
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* Header */}

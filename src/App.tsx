@@ -268,6 +268,11 @@ export default function App() {
   const netBalance = useMemo(() => totalInflows - totalOutflows, [totalInflows, totalOutflows]);
 
   const MainView = () => {
+    useEffect(() => {
+      // Reset scroll position to the top of the page
+      window.scrollTo(0, 0);
+    }, []);
+
     return (
         <div className="w-full max-w-4xl mx-auto animate-fade-in space-y-6">
             <header className={CARD_STYLES}>
@@ -335,6 +340,11 @@ export default function App() {
 
 
   const SettingsView = () => {
+    useEffect(() => {
+      // Reset scroll position to the top of the page
+      window.scrollTo(0, 0);
+    }, []);
+
     return (
       <CategorySettings
         onSave={handleSaveCategoryConfig}
@@ -406,6 +416,11 @@ export default function App() {
   };
 
   const InventoryModule = () => {
+    useEffect(() => {
+      // Reset scroll position to the top of the page
+      window.scrollTo(0, 0);
+    }, []);
+
     if (inventoryViewMode === 'create' || inventoryViewMode === 'edit') {
       return <ProductFormView mode={inventoryViewMode} productId={editingProductId} onBack={() => handleInventoryViewChange('list')} />;
     }

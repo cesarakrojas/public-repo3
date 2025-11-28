@@ -120,6 +120,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     return products.filter(p => p.totalQuantity <= 10).length;
   };
 
+  // Reset scroll position to the top of the page
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* Header */}
