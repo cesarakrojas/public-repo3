@@ -42,25 +42,27 @@ const InventoryFilters = memo<InventoryFiltersProps>(({
           onChange={(e) => setSearchTerm(e.target.value)}
           className="px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
         />
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-        >
-          <option value="">Todas las categorías</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showLowStock}
-            onChange={(e) => setShowLowStock(e.target.checked)}
-            className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-          />
-          <span className="text-slate-700 dark:text-slate-200">Solo stock bajo</span>
-        </label>
+        <div className="grid grid-cols-2 gap-4">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+          >
+            <option value="">Categorías</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showLowStock}
+              onChange={(e) => setShowLowStock(e.target.checked)}
+              className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+            />
+            <span className="text-slate-700 dark:text-slate-200">Stock bajo</span>
+          </label>
+        </div>
       </div>
     </div>
   );
@@ -146,14 +148,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="bg-emerald-100 dark:bg-emerald-900/50 p-4 rounded-xl">
             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Total Productos</p>
             <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{products.length}</p>
-          </div>
-          <div className="bg-blue-100 dark:bg-blue-900/50 p-4 rounded-xl">
-            <p className="text-sm font-medium text-blue-700 dark:text-blue-400">Valor Total</p>
-            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(getTotalValue())}</p>
           </div>
           <div className="bg-orange-100 dark:bg-orange-900/50 p-4 rounded-xl">
             <p className="text-sm font-medium text-orange-700 dark:text-orange-400">Stock Bajo</p>
