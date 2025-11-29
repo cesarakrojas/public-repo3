@@ -723,7 +723,7 @@ export default function App() {
                         className={`w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition`}
                       >
                         <BookOpenIcon className="w-6 h-6 text-slate-400" />
-                        <span>Historial</span>
+                        <span>Historial Transacciones</span>
                       </button>
                     </li>
                     <li>
