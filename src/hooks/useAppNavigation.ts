@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-type AppView = 'home' | 'inventory' | 'reports' | 'settings' | 'new-sale' | 'new-expense' | 'transaction-detail';
+type AppView = 'home' | 'inventory' | 'reports' | 'settings' | 'new-sale' | 'new-expense' | 'transaction-detail' | 'transaction-history' | 'debt-history';
 
 export function useAppNavigation() {
   const [view, setView] = useState<AppView>('home');

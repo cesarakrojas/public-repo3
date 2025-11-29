@@ -44,27 +44,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
         
         {/* HERO SECTION: Image & Key Stats */}
         <div className="bg-white dark:bg-slate-800 shadow-sm mb-4">
-          {/* Image - Full Width / Edge-to-Edge */}
-          {product.image ? (
-            <div className="w-full h-64 bg-slate-100 dark:bg-slate-700 relative">
-              <img 
-                src={product.image} 
-                alt={product.name} 
-                className="w-full h-full object-cover" 
-              />
-              {/* Floating Category Badge */}
-              {product.category && (
-                <div className="absolute bottom-4 left-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-xs font-bold rounded-full">
-                  {product.category}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Fallback Icon if no image */
-            <div className="w-full h-32 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-              <span className="text-slate-400 text-sm font-medium">Sin Imagen</span>
-            </div>
-          )}
+
 
           {/* Title & Price Block */}
           <div className="px-6 py-6 text-center">

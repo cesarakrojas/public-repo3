@@ -192,62 +192,82 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </button>
           </div>
         ) : (
-          products.map(product => (
-            <div
-              key={product.id}
-              // 1. ADDED "relative" here
-              className={`relative ${CARD_INTERACTIVE} overflow-hidden flex`}
-              onClick={() => handleViewProduct(product)}
-            >
-              
-              {/* 2. MOVED "Bajo" Tag Here with absolute positioning */}
-              {product.totalQuantity <= 10 && (
-                <span className="absolute top-3 right-3 px-2 py-1 text-xs font-semibold bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded-full z-10">
-                  Bajo
-                </span>
-              )}
+          products.map(product => {
+            // 1. Determine Status Logic per product
+            let statusColor = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+            let statusText = "En Stock";
 
-              {/* Product Image */}
-              <div className="w-32 flex-shrink-0 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center overflow-hidden">
-                {product.image ? (
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                ) : (
-                  <svg className="w-12 h-12 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                )}
-              </div>
+            if (product.totalQuantity === 0) {
+              statusColor = "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400";
+              statusText = "Sin Stock";
+            } else if (product.totalQuantity <= 10) {
+              statusColor = "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
+              statusText = "Stock Bajo";
+            }
 
-              {/* Product Info */}
-              <div className="flex-1 p-4 flex flex-col justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 dark:text-white mb-2 line-clamp-2 pr-8">{/* Added pr-8 to prevent text overlap with tag */}
-                    {product.name}
-                  </h3>
-                  
-                  {product.category && (
-                    <span className="inline-block px-2 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded mb-2">
-                      {product.category}
-                    </span>
+            return (
+              <div
+                key={product.id}
+                className={`relative ${CARD_INTERACTIVE} overflow-hidden flex bg-white dark:bg-slate-800 rounded-lg shadow-sm h-32`}
+                onClick={() => handleViewProduct(product)}
+              >
+                {/* Product Image */}
+                <div className="w-32 h-32 flex-shrink-0 bg-gray-100 dark:bg-slate-700 relative">
+                  {product.image ? (
+                    <img 
+                      src={product.image} 
+                      alt={product.name} 
+                      className={`w-full h-full object-cover ${product.totalQuantity === 0 ? 'grayscale opacity-70' : ''}`} 
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-slate-400">
+                       {/* SVG Icon */}
+                    </div>
                   )}
                 </div>
 
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Precio</p>
-                    <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(product.price)}</p>
+                {/* Product Info */}
+                <div className="flex-1 p-3 flex flex-col justify-between">
+                  
+                  {/* --- TOP ROW: Title & Price --- */}
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 dark:text-white leading-tight line-clamp-2">
+                        {product.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {product.category || 'General'}
+                      </p>
+                    </div>
+                    
+                    <div className="text-right">
+                      <span className="block text-lg font-bold text-slate-800 dark:text-slate-200">
+                         {formatCurrency(product.price)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Stock</p>
-                    {/* 3. REMOVED the "Bajo" tag from here */}
-                    <p className={`text-base font-bold ${product.totalQuantity <= 10 ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'}`}>
-                      {product.totalQuantity}
-                    </p>
+
+                  {/* --- BOTTOM ROW: Status Pill & Exact Count --- */}
+                  <div className="flex justify-between items-end">
+                    
+                    {/* LEFT: The Status Pill (Fills the void) */}
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusColor}`}>
+                      {statusText}
+                    </span>
+
+                    {/* RIGHT: Exact Stock Count */}
+                    <div className="text-right">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Disponibles</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">
+                        {product.totalQuantity}
+                      </p>
+                    </div>
+                    
                   </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

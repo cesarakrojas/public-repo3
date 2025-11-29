@@ -12,11 +12,13 @@ import { NewExpenseForm } from './components/NewExpenseForm';
 import { TransactionDetailView } from './components/TransactionDetailView';
 import { ProductDetailView } from './components/ProductDetailView';
 import { LibretaView } from './components/LibretaView';
+import { DebtHistoryView } from './components/DebtHistoryView';
 import { FormViewWrapper } from './components/FormViewWrapper';
 import { DebtForm } from './components/DebtForm';
 import { DebtDetailView } from './components/DebtDetailView';
 import { ErrorNotification } from './components/ErrorNotification';
 import { SuccessModal } from './components/SuccessModal';
+import { TransactionHistoryView } from './components/TransactionHistoryView';
 import * as inventoryService from './services/inventoryService';
 import * as debtService from './services/debtService';
 import { calculateTotalInflows, calculateTotalOutflows } from './utils/calculations';
@@ -716,6 +718,26 @@ export default function App() {
                     </li>
                     <li>
                       <button
+                        onClick={() => { setIsMenuOpen(false); navigate('transaction-history'); }}
+                        aria-current={view === 'transaction-history' || undefined}
+                        className={`w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition`}
+                      >
+                        <BookOpenIcon className="w-6 h-6 text-slate-400" />
+                        <span>Historial</span>
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => { setIsMenuOpen(false); navigate('debt-history'); }}
+                        aria-current={view === 'debt-history' || undefined}
+                        className={`w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition`}
+                      >
+                        <BookOpenIcon className="w-6 h-6 text-slate-400" />
+                        <span>Historial Deudas</span>
+                      </button>
+                    </li>
+                    <li>
+                      <button
                         onClick={() => { setIsMenuOpen(false); alert('Módulo de Productos próximamente'); }}
                         className="w-full px-5 py-4 text-left flex items-center gap-4 text-lg font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
                       >
@@ -750,6 +772,8 @@ export default function App() {
            view === 'new-sale' ? <NewSaleView /> :
            view === 'new-expense' ? <NewExpenseView /> :
            view === 'transaction-detail' ? <TransactionDetailPageView /> :
+           view === 'transaction-history' ? <TransactionHistoryView categoryConfig={categoryConfig} currencyCode={currencyCode} onOpenTransaction={(id) => { setSelectedTransactionId(id); navigate('transaction-detail'); }} /> :
+           view === 'debt-history' ? <DebtHistoryView categoryConfig={categoryConfig} onOpenDebt={(id) => { changeLibretaView('detail', id); navigate('reports'); }} /> :
            view === 'reports' ? <LibretaModule /> : 
            view === 'settings' ? <SettingsView /> : 
            view === 'inventory' ? <InventoryModule /> : 
